@@ -1,5 +1,7 @@
-pub mod bytepacket;
-pub mod rescode;
+
+mod protocol;
+
+
 
 fn main() {
 
