@@ -148,7 +148,52 @@ impl BytePacketBuffer {
       Ok(())
   }
 
+  // Write a single byte to the buffer and advance the position
+  pub fn write(&mut self, val: u8) -> Result<()> {
+    if self.pos >= 512 {
+      return Err("End of buffer".into());
+    }
+
+    self.buf[self.pos] = val;
+    self.pos += 1;
+    Ok(())
+  }
+  
+  // write a u8 to the buffer
+  pub fn write_u8(&mut self, val: u8) -> Result<()> {
+    self.write(val)?;
+
+    Ok(())
+  }
+
+  pub fn write_u16(&mut self, val: u16) -> Result<()> {
+    self.write(((val >> 8) & 0xFF) as u8)?;
+    self.write((val & 0xff) as u8)?;
+
+    Ok(())
+  }
+
+  pub fn write_u32(&mut self, val: u32) -> Result<()> {
+    self.write(((val >> 24) & 0xFF) as u8 )?;
+    self.write(((val >> 16) & 0xFF) as u8)?;
+    self.write(((val >> 8) & 0xFF) as u8)?;
+    self.write((val & 0xFF) as u8)?;
+
+    Ok(())
+  }
+
+  pub fn write_qname(&mut self, qname: &str) -> Result<()> {
+    for part in qname.split(".") {
+      if part.len() > 63 {
+        return Err("Label to long".into());
+      }
+      self.write(part.len() as u8)?;
+      for c in part.chars() {
+        self.write(c as u8)?;
+      }
+    }
+    self.write(0)?;
+    Ok(())
+  }
+
 }
-
-
-
