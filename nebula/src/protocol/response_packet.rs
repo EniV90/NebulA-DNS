@@ -7,8 +7,8 @@ use super::{byte_packet::BytePacketBuffer, dns_packet::DnsPacket};
 
 
 pub fn response_packet() -> Result<(), Box<dyn Error>> {
-  let qname = "google.com";
-  let qtype = QueryType::A;
+  let qname = "yahoo.com";
+  let qtype = QueryType::MX;
 
   let server = ("8.8.8.8", 53);
 
