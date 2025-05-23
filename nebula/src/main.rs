@@ -1,6 +1,6 @@
 use std::net::{IpAddr, UdpSocket};
 
-use protocol::{byte_packet::BytePacketBuffer, dns_packet::DnsPacket, dns_question::DnsQuestion, query_type::QueryType};
+use protocol::{byte_packet::BytePacketBuffer, dns_packet::DnsPacket, dns_question::DnsQuestion, query_type::QueryType, res_code::ResultCode};
 
 use crate::protocol::response_packet::response_packet;
 
@@ -56,15 +56,49 @@ fn handle_query(socket: &UdpSocket) -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(result) = look_up(&question.name, question.qtype) {
     packet.questions.push(question);
     packet.header.rescode = result.header.rescode;
+
+    for rec in result.answers {
+      println!("Answer: {:?}", rec);
+      packet.answers.push(rec);
+    }
+
+    for rec in result.authorities {
+      println!("Authorities: {:?}", rec);
+      packet.authorities.push(rec);
+    }
+
+    for rec in result.resources {
+      println!("Resources: {:?}", rec);
+      packet.resources.push(rec);
+    }
+    } else {
+      packet.header.rescode = ResultCode::SERVFAIL
     }
   }
+  else {
+    packet.header.rescode = ResultCode::FORMERR
+  }
 
+  let mut res_buffer = BytePacketBuffer::new();
+  packet.write(&mut res_buffer)?;
+
+  let length = res_buffer.pos;
+  let data = res_buffer.get_range(0, length)?;
+
+  socket.send_to(data, src)?;
 
     Ok(())
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
- response_packet()?;
+  let socket = UdpSocket::bind(("0.0.0.0", 2053))?;
+  
+  println!("Server running on PORT: 2053");
 
- Ok(())
+  loop {
+    match handle_query(&socket) {
+      Ok(_) => {},
+      Err(e) => eprintln!("An error occured: {}", e)
+    }
+  }
 }
