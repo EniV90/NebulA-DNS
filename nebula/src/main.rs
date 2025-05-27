@@ -1,4 +1,4 @@
-use std::net::{IpAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, UdpSocket};
 
 use protocol::{byte_packet::BytePacketBuffer, dns_packet::DnsPacket, dns_question::DnsQuestion, query_type::QueryType, res_code::ResultCode};
 
@@ -9,7 +9,7 @@ mod protocol;
 
 
 
-fn look_up(qname: &str, qtype: QueryType, ) -> Result<DnsPacket, Box<dyn std::error::Error>> {
+fn look_up(qname: &str, qtype: QueryType, server: (Ipv4Addr, u16)) -> Result<DnsPacket, Box<dyn std::error::Error>> {
   // let qname = "google.com";
   // let qtype = QueryType::A;
 
@@ -53,8 +53,8 @@ fn handle_query(socket: &UdpSocket) -> Result<(), Box<dyn std::error::Error>> {
   if let Some(question) = request.questions.pop() {
     println!("Received query {:?}", question);
 
-    if let Ok(result) = look_up(&question.name, question.qtype) {
-    packet.questions.push(question);
+    if let Ok(result) = recursive_lookup(&question.name, question.qtype) {
+    packet.questions.push(question.clone());
     packet.header.rescode = result.header.rescode;
 
     for rec in result.answers {
@@ -90,9 +90,49 @@ fn handle_query(socket: &UdpSocket) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+pub fn recursive_lookup(qname: &str, qtype: QueryType) -> Result<DnsPacket, Box<dyn std::error::Error>> {
+  let mut ns = "198.41.0.4".parse::<Ipv4Addr>().unwrap();
+
+  loop {
+    println!("Attempting lookup for {:?} {} for ns {}", qtype, qname, ns);
+
+
+    let ns_copy = ns;
+    let server = (ns_copy, 53);
+    let response = look_up(qname, qtype, server)?;
+
+    if !response.answers.is_empty() && response.header.rescode == ResultCode::NOERROR {
+      return Ok(response)
+    }
+
+    if response.header.rescode == ResultCode::NXDOMIAN {
+      return Ok(response);
+    }
+
+    if let Some(new_ns) = response.get_resolved_ns(qname) {
+      ns = new_ns;
+
+      continue;
+    }
+
+    let new_ns_name = match response.get_unresolved_ns(qname) {
+      Some(x) => x,
+      None => return Ok(response)
+    };
+
+    let recursive_response = recursive_lookup(&new_ns_name, QueryType::A)?;
+
+    if let Some(new_ns) = recursive_response.get_random_a() {
+      ns = new_ns;
+    } else {
+      return Ok(response)
+    }
+  }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
   let socket = UdpSocket::bind(("0.0.0.0", 2053))?;
-  
+
   println!("Server running on PORT: 2053");
 
   loop {
